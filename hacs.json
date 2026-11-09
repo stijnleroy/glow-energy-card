@@ -1,0 +1,6 @@
+{
+  "name": "Glow Energy Card",
+  "filename": "glow-energy-card.js",
+  "render_readme": true,
+  "homeassistant": "2024.8.0"
+}
