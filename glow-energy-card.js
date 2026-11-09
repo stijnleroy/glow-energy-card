@@ -8,7 +8,7 @@
  * Licentie: MIT
  */
 
-const GEC_VERSION = '1.0.0';
+const GEC_VERSION = '1.0.1';
 
 const GEC_COL = {
   sun: '255, 224, 138',
@@ -255,7 +255,7 @@ const GEC_STYLE = `
 
   /* tegels */
   .tiles { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
-  .viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; border-radius: 22px; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; }
+  .viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; border-radius: 22px; touch-action: pan-y; overscroll-behavior: contain; user-select: none; -webkit-user-select: none; cursor: grab; }
   .track { display: flex; height: 100%; will-change: transform; }
   .track.anim { transition: transform 0.35s cubic-bezier(.4, 0, .2, 1); }
   .tile {
@@ -562,13 +562,40 @@ class GlowEnergyCard extends HTMLElement {
     let startX = null;
     let startY = null;
     let moved = false;
+
+    // Swipes op de tegels mogen niet doorlopen naar het dashboard (wisselen
+    // tussen views, bv. hass-swipe-navigation of de kiosk-browser).
+    let tStartX = null;
+    let tStartY = null;
+    let tHoriz = null;
+    const stop = (e) => e.stopPropagation();
+    vp.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      const p = e.touches[0];
+      tStartX = p.clientX; tStartY = p.clientY; tHoriz = null;
+    }, { passive: true });
+    vp.addEventListener('touchmove', (e) => {
+      e.stopPropagation();
+      if (tStartX === null) return;
+      const p = e.touches[0];
+      const dx = p.clientX - tStartX;
+      const dy = p.clientY - tStartY;
+      if (tHoriz === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) tHoriz = Math.abs(dx) > Math.abs(dy);
+      if (tHoriz && e.cancelable) e.preventDefault();
+    }, { passive: false });
+    vp.addEventListener('touchend', (e) => { e.stopPropagation(); tStartX = null; });
+    vp.addEventListener('touchcancel', (e) => { e.stopPropagation(); tStartX = null; });
+    ['mousedown', 'mousemove', 'mouseup'].forEach((ev) => vp.addEventListener(ev, stop));
+
     vp.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
       if (e.button !== undefined && e.button !== 0) return;
       startX = e.clientX; startY = e.clientY; moved = false;
       try { vp.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       this._track.classList.remove('anim');
     });
     vp.addEventListener('pointermove', (e) => {
+      e.stopPropagation();
       if (startX === null) return;
       const dx = e.clientX - startX;
       if (Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(e.clientY - startY)) moved = true;
@@ -590,8 +617,8 @@ class GlowEnergyCard extends HTMLElement {
         }
       }
     };
-    vp.addEventListener('pointerup', (e) => end(e, false));
-    vp.addEventListener('pointercancel', (e) => end(e, true));
+    vp.addEventListener('pointerup', (e) => { e.stopPropagation(); end(e, false); });
+    vp.addEventListener('pointercancel', (e) => { e.stopPropagation(); end(e, true); });
   }
 
   _setTrack(anim, dx = 0) {
